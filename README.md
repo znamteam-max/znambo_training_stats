@@ -56,6 +56,10 @@ Useful routes:
 
 `/api/telegram/test` requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 
+## Vercel
+
+`vercel.json` pins the project to the Next.js framework preset and clears any manual static output directory override.
+
 ## First Codex Task
 
 Read `PROJECT_BRIEF.md` and `IMPLEMENTATION_PLAN.md`.
