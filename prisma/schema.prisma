@@ -10,6 +10,8 @@ datasource db {
 model Athlete {
   id              String        @id @default(cuid())
   stravaAthleteId BigInt?       @unique
+  stravaScope     String?
+  stravaProfile   Json?
   telegramChatId  String?
   ftpWatts        Int           @default(285)
   weightKg        Float?
@@ -39,6 +41,8 @@ model Activity {
   averageHeartRate     Float?
   maxHeartRate         Int?
   rawSummary           Json?
+  powerZoneSeconds     Json?
+  reportText           String?
   reportSentAt         DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

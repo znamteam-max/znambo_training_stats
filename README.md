@@ -53,8 +53,92 @@ Useful routes:
 
 - `GET /api/health`
 - `GET /api/telegram/test`
+- `GET /api/strava/auth`
+- `GET /api/strava/latest`
+- `GET /api/strava/webhook`
+- `POST /api/strava/webhook`
+- `POST /api/telegram/webhook`
+- `GET /api/cron/sync`
 
 `/api/telegram/test` requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
+## Strava Connection
+
+Create a Strava app at `https://www.strava.com/settings/api`.
+
+Use this callback URL:
+
+```text
+https://YOUR_VERCEL_DOMAIN/api/strava/callback
+```
+
+Set these Vercel environment variables:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `CRON_SECRET`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `STRAVA_CLIENT_ID`
+- `STRAVA_CLIENT_SECRET`
+- `STRAVA_REDIRECT_URI`
+- `STRAVA_OAUTH_STATE_SECRET`
+- `STRAVA_WEBHOOK_VERIFY_TOKEN`
+
+After Neon is connected, apply the database migration:
+
+```bash
+npm run db:deploy
+```
+
+Then open:
+
+```text
+https://YOUR_VERCEL_DOMAIN/api/strava/auth
+```
+
+For Telegram-linked setup, use `/connect` in the bot and open the link it sends.
+
+## Telegram Webhook
+
+Set the Telegram webhook to:
+
+```text
+https://YOUR_VERCEL_DOMAIN/api/telegram/webhook
+```
+
+Use `TELEGRAM_WEBHOOK_SECRET` as the Telegram webhook secret token.
+
+Supported commands:
+
+- `/connect`
+- `/last`
+- `/plan`
+- `/ftp 285`
+- `/weight 82`
+- `/note сон 6 часов, ноги тяжёлые`
+
+## Strava Webhook
+
+Use this callback URL when creating a Strava webhook subscription:
+
+```text
+https://YOUR_VERCEL_DOMAIN/api/strava/webhook
+```
+
+Use `STRAVA_WEBHOOK_VERIFY_TOKEN` as the Strava verify token.
+
+The webhook processes new or updated Strava activities and sends the latest report to Telegram if it has not already been sent.
+
+## Cron Fallback
+
+`vercel.json` includes a daily fallback sync:
+
+```text
+0 4 * * *
+```
+
+Vercel sends `CRON_SECRET` as the `Authorization: Bearer ...` header for cron requests.
 
 ## Vercel
 
