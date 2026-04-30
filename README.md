@@ -39,6 +39,8 @@ Build the MVP without AI-generated reports:
 
 Copy `.env.example` to `.env.local` for local development and configure the same values in Vercel.
 
+The project can build before Neon is connected, but database-backed routes require `DATABASE_URL` at runtime.
+
 ## Local Development
 
 ```bash
