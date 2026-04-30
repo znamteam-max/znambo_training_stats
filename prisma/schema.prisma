@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Athlete {
+  id              String        @id @default(cuid())
+  stravaAthleteId BigInt?       @unique
+  telegramChatId  String?
+  ftpWatts        Int           @default(285)
+  weightKg        Float?
+  accessToken     String?
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  activities      Activity[]
+  notes           AthleteNote[]
+}
+
+model Activity {
+  id                   String   @id @default(cuid())
+  athleteId            String
+  stravaActivityId     BigInt   @unique
+  type                 String
+  name                 String?
+  startDate            DateTime
+  elapsedTimeSeconds   Int?
+  movingTimeSeconds    Int?
+  distanceMeters       Float?
+  averagePowerWatts    Float?
+  normalizedPowerWatts Float?
+  intensityFactor      Float?
+  trainingStressScore  Float?
+  averageHeartRate     Float?
+  maxHeartRate         Int?
+  rawSummary           Json?
+  reportSentAt         DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  athlete              Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, startDate])
+}
+
+model AthleteNote {
+  id        String   @id @default(cuid())
+  athleteId String
+  text      String
+  createdAt DateTime @default(now())
+  athlete   Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, createdAt])
+}

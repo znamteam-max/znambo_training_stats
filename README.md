@@ -39,6 +39,21 @@ Build the MVP without AI-generated reports:
 
 Copy `.env.example` to `.env.local` for local development and configure the same values in Vercel.
 
+## Local Development
+
+```bash
+npm install
+npm run db:generate
+npm run dev
+```
+
+Useful routes:
+
+- `GET /api/health`
+- `GET /api/telegram/test`
+
+`/api/telegram/test` requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
 ## First Codex Task
 
 Read `PROJECT_BRIEF.md` and `IMPLEMENTATION_PLAN.md`.
