@@ -22,6 +22,7 @@ model Athlete {
   updatedAt       DateTime      @updatedAt
   activities      Activity[]
   notes           AthleteNote[]
+  healthLogs      DailyHealthLog[]
 }
 
 model Activity {
@@ -59,4 +60,29 @@ model AthleteNote {
   athlete   Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   @@index([athleteId, createdAt])
+}
+
+model DailyHealthLog {
+  id                  String   @id @default(cuid())
+  athleteId           String
+  date                DateTime
+  timezone            String?
+  activeEnergyKcal    Float?
+  dietaryEnergyKcal   Float?
+  proteinGrams        Float?
+  carbsGrams          Float?
+  fatGrams            Float?
+  bodyMassKg          Float?
+  sleepMinutes        Int?
+  restingHeartRateBpm Float?
+  hrvMs               Float?
+  steps               Int?
+  source              String?
+  rawHealth           Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  athlete             Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, date])
+  @@index([athleteId, date])
 }

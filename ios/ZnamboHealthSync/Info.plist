@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Znambo Health Sync</string>
+  <key>NSHealthShareUsageDescription</key>
+  <string>Znambo Health Sync reads your Apple Health data to send daily recovery and nutrition context to your private training bot.</string>
+  <key>NSHealthUpdateUsageDescription</key>
+  <string>Znambo Health Sync does not write Health data, but iOS may show this permission when HealthKit is enabled.</string>
+</dict>
+</plist>

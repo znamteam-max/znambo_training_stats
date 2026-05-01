@@ -77,6 +77,7 @@ Set these Vercel environment variables:
 - `DATABASE_URL`
 - `NEXT_PUBLIC_APP_URL`
 - `CRON_SECRET`
+- `HEALTH_IMPORT_SECRET`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_WEBHOOK_SECRET`
 - `STRAVA_CLIENT_ID`
@@ -118,6 +119,8 @@ Supported commands:
 - `/connect`
 - `/last`
 - `/plan`
+- `/health`
+- `/today`
 - `/ask вопрос`
 - `/ftp 285`
 - `/weight 82`
@@ -125,6 +128,26 @@ Supported commands:
 
 Plain text messages without a slash command are sent to the GPT chat handler
 when `OPENAI_API_KEY` is configured.
+
+## Apple Health Sync
+
+The backend accepts daily Apple Health summaries from the companion iOS app:
+
+```text
+POST https://YOUR_VERCEL_DOMAIN/api/health/import
+Authorization: Bearer HEALTH_IMPORT_SECRET
+```
+
+The iOS scaffold lives in:
+
+```text
+ios/ZnamboHealthSync
+```
+
+It reads HealthKit data from the iPhone and sends daily sleep, HRV, resting
+heart rate, steps, active energy, body mass, calories, and macros to the bot.
+MyFitnessPal should be linked to Apple Health first so nutrition appears in
+HealthKit. After syncing, use `/health` or `/today` in Telegram.
 
 ## Strava Webhook
 

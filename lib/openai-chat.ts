@@ -1,6 +1,7 @@
 type AskTrainingCoachInput = {
   question: string;
   latestReportText?: string | null;
+  latestHealthText?: string | null;
 };
 
 type OpenAIResponsePayload = {
@@ -52,12 +53,14 @@ function extractText(payload: OpenAIResponsePayload) {
 }
 
 function buildInput(input: AskTrainingCoachInput) {
-  const parts = [
-    `Вопрос пользователя:\n${input.question}`,
-  ];
+  const parts = [`Вопрос пользователя:\n${input.question}`];
 
   if (input.latestReportText) {
     parts.push(`Последний разбор тренировки:\n${input.latestReportText}`);
+  }
+
+  if (input.latestHealthText) {
+    parts.push(`Последние данные здоровья и питания:\n${input.latestHealthText}`);
   }
 
   return parts.join("\n\n");
@@ -75,11 +78,11 @@ export async function askTrainingCoach(input: AskTrainingCoachInput) {
       instructions: [
         "Ты Telegram-чат тренировочного бота для велосипедиста/мультиспорта.",
         "Отвечай по-русски, конкретно и по делу.",
-        "Если есть контекст последней тренировки, используй его.",
-        "Не выдумывай данные Strava, которых нет в сообщении.",
+        "Если есть контекст последней тренировки, здоровья или питания, используй его.",
+        "Не выдумывай данные Strava, Apple Health или питания, которых нет в сообщении.",
         "Давай практические рекомендации: что делать сегодня/завтра, на что смотреть, какие риски.",
         "Ответ держи в пределах 1800 символов, чтобы он нормально помещался в Telegram.",
-        "Всегда заканчивай ответ короткой строкой 'Итог: ...', не обрывай список на середине.",
+        "В конце дай строку с реальным выводом в формате 'Итог: <конкретное действие>'. Не пиши многоточие вместо вывода.",
       ].join("\n"),
       input: buildInput(input),
       max_output_tokens: 1400,
@@ -92,7 +95,8 @@ export async function askTrainingCoach(input: AskTrainingCoachInput) {
     | null;
 
   if (!response.ok) {
-    const message = payload?.error?.message ?? `OpenAI request failed with ${response.status}.`;
+    const message =
+      payload?.error?.message ?? `OpenAI request failed with ${response.status}.`;
 
     throw new Error(message);
   }

@@ -4,6 +4,11 @@ import {
   getOrCreateTelegramAthlete,
   processLatestActivity,
 } from "@/lib/activity-service";
+import {
+  buildDailyHealthContext,
+  buildDailyHealthSummary,
+  getLatestDailyHealthLog,
+} from "@/lib/health-service";
 import { askTrainingCoach, OpenAIConfigError } from "@/lib/openai-chat";
 import { buildPlanFromStoredActivity } from "@/lib/report";
 import { sendTelegramMessage } from "@/lib/telegram";
@@ -100,6 +105,15 @@ async function handlePlanCommand(chatId: string) {
   });
 }
 
+async function handleHealthCommand(chatId: string) {
+  const latestHealth = await getLatestDailyHealthLog(chatId);
+
+  return sendTelegramMessage({
+    chatId,
+    text: buildDailyHealthSummary(latestHealth),
+  });
+}
+
 async function handleFtpCommand(chatId: string, value: string | undefined) {
   const ftp = Number(value);
 
@@ -176,11 +190,13 @@ async function handleCoachChat(chatId: string, text: string) {
   }
 
   const latestActivity = await getLatestStoredActivity(chatId);
+  const latestHealth = await getLatestDailyHealthLog(chatId);
 
   try {
     const answer = await askTrainingCoach({
       question: text,
       latestReportText: latestActivity?.reportText,
+      latestHealthText: buildDailyHealthContext(latestHealth),
     });
 
     return sendTelegramMessage({
@@ -234,6 +250,10 @@ export async function handleTelegramMessage(
     return handlePlanCommand(chatId);
   }
 
+  if (command === "/health" || command === "/today") {
+    return handleHealthCommand(chatId);
+  }
+
   if (command === "/ftp") {
     return handleFtpCommand(chatId, args[0]);
   }
@@ -253,7 +273,7 @@ export async function handleTelegramMessage(
   if (command.startsWith("/")) {
     return sendTelegramMessage({
       chatId,
-      text: "Команды: /connect, /last, /plan, /ask вопрос, /ftp 285, /weight 82, /note текст. Обычный текст без команды я отправлю в GPT-чат.",
+      text: "Команды: /connect, /last, /plan, /health, /ask вопрос, /ftp 285, /weight 82, /note текст. Обычный текст без команды я отправлю в GPT-чат.",
     });
   }
 
