@@ -4,6 +4,7 @@ import {
   getOrCreateTelegramAthlete,
   processLatestActivity,
 } from "@/lib/activity-service";
+import { askTrainingCoach, OpenAIConfigError } from "@/lib/openai-chat";
 import { buildPlanFromStoredActivity } from "@/lib/report";
 import { sendTelegramMessage } from "@/lib/telegram";
 
@@ -166,6 +167,43 @@ async function handleNoteCommand(chatId: string, text: string) {
   });
 }
 
+async function handleCoachChat(chatId: string, text: string) {
+  if (!text) {
+    return sendTelegramMessage({
+      chatId,
+      text: "Напиши вопрос после /ask или просто отправь обычное сообщение.",
+    });
+  }
+
+  const latestActivity = await getLatestStoredActivity(chatId);
+
+  try {
+    const answer = await askTrainingCoach({
+      question: text,
+      latestReportText: latestActivity?.reportText,
+    });
+
+    return sendTelegramMessage({
+      chatId,
+      text: answer,
+    });
+  } catch (error) {
+    if (error instanceof OpenAIConfigError) {
+      return sendTelegramMessage({
+        chatId,
+        text: "GPT-чат ещё не включён. Добавь OPENAI_API_KEY в Vercel Environment Variables и сделай redeploy.",
+      });
+    }
+
+    const message = error instanceof Error ? error.message : "unknown error";
+
+    return sendTelegramMessage({
+      chatId,
+      text: `GPT сейчас не ответил: ${message}`,
+    });
+  }
+}
+
 export async function handleTelegramMessage(
   message: TelegramMessage,
   requestUrl: string,
@@ -208,8 +246,16 @@ export async function handleTelegramMessage(
     return handleNoteCommand(chatId, rawArgs);
   }
 
-  return sendTelegramMessage({
-    chatId,
-    text: "Команды: /connect, /last, /plan, /ftp 285, /weight 82, /note текст.",
-  });
+  if (command === "/ask") {
+    return handleCoachChat(chatId, rawArgs);
+  }
+
+  if (command.startsWith("/")) {
+    return sendTelegramMessage({
+      chatId,
+      text: "Команды: /connect, /last, /plan, /ask вопрос, /ftp 285, /weight 82, /note текст. Обычный текст без команды я отправлю в GPT-чат.",
+    });
+  }
+
+  return handleCoachChat(chatId, text);
 }

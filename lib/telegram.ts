@@ -11,6 +11,16 @@ type SendTelegramMessageInput = {
   parseMode?: "HTML" | "MarkdownV2";
 };
 
+const telegramTextLimit = 4000;
+
+function limitTelegramText(text: string) {
+  if (text.length <= telegramTextLimit) {
+    return text;
+  }
+
+  return `${text.slice(0, telegramTextLimit - 40)}\n\n[ответ обрезан: лимит Telegram]`;
+}
+
 function getTelegramToken() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -44,7 +54,7 @@ export async function sendTelegramMessage(input: SendTelegramMessageInput) {
       },
       body: JSON.stringify({
         chat_id: chatId,
-        text: input.text,
+        text: limitTelegramText(input.text),
         parse_mode: input.parseMode,
         disable_web_page_preview: true,
       }),

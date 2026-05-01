@@ -84,6 +84,8 @@ Set these Vercel environment variables:
 - `STRAVA_REDIRECT_URI`
 - `STRAVA_OAUTH_STATE_SECRET`
 - `STRAVA_WEBHOOK_VERIFY_TOKEN`
+- `OPENAI_API_KEY` for GPT chat replies in Telegram
+- `OPENAI_MODEL` optional, defaults to `gpt-5-mini`
 
 Leave `STRAVA_WEBHOOK_SIGNING_SECRET` empty unless Strava provides a webhook signing secret/header for your app.
 
@@ -116,9 +118,13 @@ Supported commands:
 - `/connect`
 - `/last`
 - `/plan`
+- `/ask вопрос`
 - `/ftp 285`
 - `/weight 82`
 - `/note сон 6 часов, ноги тяжёлые`
+
+Plain text messages without a slash command are sent to the GPT chat handler
+when `OPENAI_API_KEY` is configured.
 
 ## Strava Webhook
 
