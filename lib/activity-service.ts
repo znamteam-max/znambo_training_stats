@@ -12,6 +12,10 @@ import {
 
 const tokenRefreshBufferMs = 1000 * 60 * 5;
 
+function pickConnectedAthlete(athletes: Athlete[]) {
+  return athletes.find((athlete) => athlete.refreshToken) ?? athletes[0] ?? null;
+}
+
 function toInputJson(value: unknown) {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
@@ -28,12 +32,14 @@ function getDefaultWeightKg() {
 
 export async function getOrCreateTelegramAthlete(telegramChatId: string) {
   const db = getDb();
-  const existing = await db.athlete.findFirst({
+  const existing = await db.athlete.findMany({
     where: { telegramChatId },
+    orderBy: { createdAt: "asc" },
   });
+  const athlete = pickConnectedAthlete(existing);
 
-  if (existing) {
-    return existing;
+  if (athlete) {
+    return athlete;
   }
 
   return db.athlete.create({
@@ -43,6 +49,43 @@ export async function getOrCreateTelegramAthlete(telegramChatId: string) {
       weightKg: getDefaultWeightKg(),
     },
   });
+}
+
+async function mergeTelegramOnlyAthletes(input: {
+  telegramChatId: string;
+  targetAthleteId: string;
+}) {
+  const db = getDb();
+  const duplicates = await db.athlete.findMany({
+    where: {
+      telegramChatId: input.telegramChatId,
+      stravaAthleteId: null,
+      accessToken: null,
+      refreshToken: null,
+      NOT: { id: input.targetAthleteId },
+    },
+    select: { id: true },
+  });
+
+  const duplicateIds = duplicates.map((athlete) => athlete.id);
+
+  if (duplicateIds.length === 0) {
+    return;
+  }
+
+  await db.$transaction([
+    db.activity.updateMany({
+      where: { athleteId: { in: duplicateIds } },
+      data: { athleteId: input.targetAthleteId },
+    }),
+    db.athleteNote.updateMany({
+      where: { athleteId: { in: duplicateIds } },
+      data: { athleteId: input.targetAthleteId },
+    }),
+    db.athlete.deleteMany({
+      where: { id: { in: duplicateIds } },
+    }),
+  ]);
 }
 
 export async function storeStravaAuthorization(input: {
@@ -70,10 +113,19 @@ export async function storeStravaAuthorization(input: {
   });
 
   if (existingByStrava) {
-    return db.athlete.update({
+    const athlete = await db.athlete.update({
       where: { id: existingByStrava.id },
       data,
     });
+
+    if (input.telegramChatId) {
+      await mergeTelegramOnlyAthletes({
+        telegramChatId: input.telegramChatId,
+        targetAthleteId: athlete.id,
+      });
+    }
+
+    return athlete;
   }
 
   if (input.telegramChatId) {
@@ -86,17 +138,24 @@ export async function storeStravaAuthorization(input: {
     });
 
     if (existingByTelegram) {
-      return db.athlete.update({
+      const athlete = await db.athlete.update({
         where: { id: existingByTelegram.id },
         data: {
           stravaAthleteId,
           ...data,
         },
       });
+
+      await mergeTelegramOnlyAthletes({
+        telegramChatId: input.telegramChatId,
+        targetAthleteId: athlete.id,
+      });
+
+      return athlete;
     }
   }
 
-  return db.athlete.create({
+  const athlete = await db.athlete.create({
     data: {
       stravaAthleteId,
       ftpWatts: getDefaultFtp(),
@@ -104,6 +163,15 @@ export async function storeStravaAuthorization(input: {
       ...data,
     },
   });
+
+  if (input.telegramChatId) {
+    await mergeTelegramOnlyAthletes({
+      telegramChatId: input.telegramChatId,
+      targetAthleteId: athlete.id,
+    });
+  }
+
+  return athlete;
 }
 
 async function getPrimaryAthlete(input?: {
@@ -121,11 +189,12 @@ async function getPrimaryAthlete(input?: {
   }
 
   if (input?.telegramChatId) {
-    const athlete = await db.athlete.findFirst({
+    const athletes = await db.athlete.findMany({
       where: { telegramChatId: input.telegramChatId },
+      orderBy: { createdAt: "asc" },
     });
 
-    return athlete;
+    return pickConnectedAthlete(athletes);
   }
 
   return db.athlete.findFirst({
