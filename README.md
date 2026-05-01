@@ -84,7 +84,8 @@ Set these Vercel environment variables:
 - `STRAVA_REDIRECT_URI`
 - `STRAVA_OAUTH_STATE_SECRET`
 - `STRAVA_WEBHOOK_VERIFY_TOKEN`
-- `STRAVA_WEBHOOK_SIGNING_SECRET`
+
+Leave `STRAVA_WEBHOOK_SIGNING_SECRET` empty unless Strava provides a webhook signing secret/header for your app.
 
 After Neon is connected, apply the database migration:
 
