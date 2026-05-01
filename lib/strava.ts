@@ -42,7 +42,11 @@ export type StravaStreamSet = {
   distance?: StravaStream<number>;
 };
 
-export const STRAVA_SCOPES = ["read", "activity:read_all"] as const;
+export const STRAVA_SCOPES = [
+  "read",
+  "activity:read",
+  "activity:read_all",
+] as const;
 
 export class StravaConfigError extends Error {
   constructor(message: string) {
