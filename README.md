@@ -132,7 +132,9 @@ when `OPENAI_API_KEY` is configured.
 
 `/menu` opens an inline Telegram menu. The training calendar syncs recent Strava
 activities, groups them by date, and lets you select one or several activities
-for the same day before confirming the selection.
+for the same day before confirming the selection. Confirmed selections are saved
+as short context notes so a follow-up GPT message like "compare them" can use
+the selected workouts.
 
 ## Apple Health Sync
 

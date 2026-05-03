@@ -2,6 +2,7 @@ type AskTrainingCoachInput = {
   question: string;
   latestReportText?: string | null;
   latestHealthText?: string | null;
+  latestNotesText?: string | null;
 };
 
 type OpenAIResponsePayload = {
@@ -61,6 +62,10 @@ function buildInput(input: AskTrainingCoachInput) {
 
   if (input.latestHealthText) {
     parts.push(`Последние данные здоровья и питания:\n${input.latestHealthText}`);
+  }
+
+  if (input.latestNotesText) {
+    parts.push(`Последние заметки и выбранные тренировки:\n${input.latestNotesText}`);
   }
 
   return parts.join("\n\n");

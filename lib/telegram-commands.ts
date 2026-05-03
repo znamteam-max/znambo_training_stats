@@ -1,5 +1,7 @@
 import { getDb } from "@/lib/db";
 import {
+  addAthleteNote,
+  getRecentAthleteNotes,
   getLatestStoredActivity,
   getOrCreateTelegramAthlete,
   processLatestActivity,
@@ -160,8 +162,6 @@ async function handleWeightCommand(chatId: string, value: string | undefined) {
 }
 
 async function handleNoteCommand(chatId: string, text: string) {
-  const athlete = await getOrCreateTelegramAthlete(chatId);
-
   if (!text) {
     return sendTelegramMessage({
       chatId,
@@ -169,12 +169,7 @@ async function handleNoteCommand(chatId: string, text: string) {
     });
   }
 
-  await getDb().athleteNote.create({
-    data: {
-      athleteId: athlete.id,
-      text,
-    },
-  });
+  await addAthleteNote({ telegramChatId: chatId, text });
 
   return sendTelegramMessage({
     chatId,
@@ -192,12 +187,14 @@ async function handleCoachChat(chatId: string, text: string) {
 
   const latestActivity = await getLatestStoredActivity(chatId);
   const latestHealth = await getLatestDailyHealthLog(chatId);
+  const notes = await getRecentAthleteNotes({ telegramChatId: chatId, take: 3 });
 
   try {
     const answer = await askTrainingCoach({
       question: text,
       latestReportText: latestActivity?.reportText,
       latestHealthText: buildDailyHealthContext(latestHealth),
+      latestNotesText: notes.map((note) => note.text).join("\n\n"),
     });
 
     return sendTelegramMessage({

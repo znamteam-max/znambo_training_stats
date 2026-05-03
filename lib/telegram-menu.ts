@@ -1,5 +1,6 @@
 import type { Activity } from "@/generated/prisma/client";
 import {
+  addAthleteNote,
   buildStoredActivityLine,
   getStoredActivities,
   syncRecentActivities,
@@ -321,10 +322,17 @@ async function renderLastTwo(chatId: string, messageId: number) {
       });
     }
 
+    const summary = buildSelectionSummary(activities);
+
+    await addAthleteNote({
+      telegramChatId: chatId,
+      text: `Выбранные последние тренировки для разбора:\n${summary}`,
+    });
+
     return editMenu({
       chatId,
       messageId,
-      text: buildSelectionSummary(activities),
+      text: summary,
       replyMarkup: getBackToMenuMarkup(),
     });
   } catch (error) {
@@ -465,11 +473,17 @@ export async function handleTelegramCallback(query: TelegramCallbackQuery) {
       .sort((left, right) => left - right)
       .map((index) => dayActivities[index])
       .filter((activity): activity is Activity => Boolean(activity));
+    const summary = buildSelectionSummary(selectedActivities);
+
+    await addAthleteNote({
+      telegramChatId: chatId,
+      text: `Выбранные тренировки для разбора:\n${summary}`,
+    });
 
     return editMenu({
       chatId,
       messageId,
-      text: buildSelectionSummary(selectedActivities),
+      text: summary,
       replyMarkup: getBackToMenuMarkup(),
     });
   }

@@ -406,6 +406,37 @@ export async function getLatestStoredActivity(telegramChatId?: string) {
   });
 }
 
+export async function addAthleteNote(input: {
+  telegramChatId: string;
+  text: string;
+}) {
+  const athlete = await getOrCreateTelegramAthlete(input.telegramChatId);
+
+  return getDb().athleteNote.create({
+    data: {
+      athleteId: athlete.id,
+      text: input.text,
+    },
+  });
+}
+
+export async function getRecentAthleteNotes(input: {
+  telegramChatId: string;
+  take?: number;
+}) {
+  const athlete = await getPrimaryAthlete({ telegramChatId: input.telegramChatId });
+
+  if (!athlete) {
+    return [];
+  }
+
+  return getDb().athleteNote.findMany({
+    where: { athleteId: athlete.id },
+    orderBy: { createdAt: "desc" },
+    take: input.take ?? 3,
+  });
+}
+
 export async function getStoredActivities(input: {
   telegramChatId: string;
   take?: number;
