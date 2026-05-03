@@ -12,6 +12,12 @@ type SendTelegramMessageInput = {
   replyMarkup?: TelegramReplyMarkup;
 };
 
+type TelegramSendMessagePayload = {
+  result?: {
+    message_id?: number;
+  };
+};
+
 const telegramTextLimit = 3900;
 
 export type TelegramInlineKeyboardButton = {
@@ -86,6 +92,20 @@ function getTelegramChatId(chatId?: string) {
   return resolvedChatId;
 }
 
+export function getTelegramMessageId(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return getTelegramMessageId(payload.at(-1));
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const messageId = (payload as TelegramSendMessagePayload).result?.message_id;
+
+  return typeof messageId === "number" ? messageId : null;
+}
+
 export async function sendTelegramMessage(input: SendTelegramMessageInput) {
   const token = getTelegramToken();
   const chatId = getTelegramChatId(input.chatId);
@@ -121,6 +141,55 @@ export async function sendTelegramMessage(input: SendTelegramMessageInput) {
   }
 
   return results.length === 1 ? results[0] : results;
+}
+
+export async function sendTelegramChatAction(input: {
+  chatId?: string;
+  action?: "typing";
+}) {
+  const token = getTelegramToken();
+  const chatId = getTelegramChatId(input.chatId);
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/sendChatAction`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        action: input.action ?? "typing",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Telegram sendChatAction failed with ${response.status}.`);
+  }
+}
+
+export async function deleteTelegramMessage(input: {
+  chatId: string;
+  messageId: number;
+}) {
+  const token = getTelegramToken();
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/deleteMessage`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: input.chatId,
+        message_id: input.messageId,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Telegram deleteMessage failed with ${response.status}.`);
+  }
 }
 
 export async function editTelegramMessage(input: {

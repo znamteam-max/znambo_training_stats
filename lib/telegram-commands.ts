@@ -14,7 +14,12 @@ import {
 import { askTrainingCoach, OpenAIConfigError } from "@/lib/openai-chat";
 import { buildPlanFromStoredActivity } from "@/lib/report";
 import { sendMainMenu } from "@/lib/telegram-menu";
-import { sendTelegramMessage } from "@/lib/telegram";
+import {
+  deleteTelegramMessage,
+  getTelegramMessageId,
+  sendTelegramChatAction,
+  sendTelegramMessage,
+} from "@/lib/telegram";
 
 type TelegramMessage = {
   chat: {
@@ -177,6 +182,36 @@ async function handleNoteCommand(chatId: string, text: string) {
   });
 }
 
+function startTypingIndicator(chatId: string) {
+  void sendTelegramChatAction({ chatId }).catch(() => undefined);
+
+  const timer = setInterval(() => {
+    void sendTelegramChatAction({ chatId }).catch(() => undefined);
+  }, 4000);
+
+  return () => clearInterval(timer);
+}
+
+async function sendThinkingMessage(chatId: string) {
+  const payload = await sendTelegramMessage({
+    chatId,
+    text: "Думаю",
+  }).catch(() => null);
+
+  return getTelegramMessageId(payload);
+}
+
+async function deleteThinkingMessage(chatId: string, messageId: number | null) {
+  if (!messageId) {
+    return;
+  }
+
+  await deleteTelegramMessage({
+    chatId,
+    messageId,
+  }).catch(() => undefined);
+}
+
 async function handleCoachChat(chatId: string, text: string) {
   if (!text) {
     return sendTelegramMessage({
@@ -185,11 +220,16 @@ async function handleCoachChat(chatId: string, text: string) {
     });
   }
 
-  const latestActivity = await getLatestStoredActivity(chatId);
-  const latestHealth = await getLatestDailyHealthLog(chatId);
-  const notes = await getRecentAthleteNotes({ telegramChatId: chatId, take: 3 });
+  const stopTyping = startTypingIndicator(chatId);
+  const thinkingMessageId = await sendThinkingMessage(chatId);
 
   try {
+    const latestActivity = await getLatestStoredActivity(chatId);
+    const latestHealth = await getLatestDailyHealthLog(chatId);
+    const notes = await getRecentAthleteNotes({
+      telegramChatId: chatId,
+      take: 3,
+    });
     const answer = await askTrainingCoach({
       question: text,
       latestReportText: latestActivity?.reportText,
@@ -197,13 +237,13 @@ async function handleCoachChat(chatId: string, text: string) {
       latestNotesText: notes.map((note) => note.text).join("\n\n"),
     });
 
-    return sendTelegramMessage({
+    return await sendTelegramMessage({
       chatId,
       text: answer,
     });
   } catch (error) {
     if (error instanceof OpenAIConfigError) {
-      return sendTelegramMessage({
+      return await sendTelegramMessage({
         chatId,
         text: "GPT-чат ещё не включён. Добавь OPENAI_API_KEY в Vercel Environment Variables и сделай redeploy.",
       });
@@ -211,10 +251,13 @@ async function handleCoachChat(chatId: string, text: string) {
 
     const message = error instanceof Error ? error.message : "unknown error";
 
-    return sendTelegramMessage({
+    return await sendTelegramMessage({
       chatId,
       text: `GPT сейчас не ответил: ${message}`,
     });
+  } finally {
+    stopTyping();
+    await deleteThinkingMessage(chatId, thinkingMessageId);
   }
 }
 
