@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import type { Athlete } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { calculateActivityMetrics } from "@/lib/metrics";
+import type { ActivityMetrics } from "@/lib/metrics";
 import { buildActivityReport } from "@/lib/report";
 import {
   fetchStravaActivities,
@@ -19,7 +20,11 @@ function pickConnectedAthlete(athletes: Athlete[]) {
 }
 
 function toInputJson(value: unknown) {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  return JSON.parse(
+    JSON.stringify(value, (_key, item) =>
+      typeof item === "bigint" ? item.toString() : item,
+    ),
+  ) as Prisma.InputJsonValue;
 }
 
 function getActivityStartDate(activity: StravaSummaryActivity) {
@@ -331,6 +336,58 @@ export async function processLatestActivity(input?: {
     metrics,
     reportText,
   };
+}
+
+export async function storeCalculatedActivity(input: {
+  athlete: Athlete;
+  externalActivityId: bigint;
+  summary: StravaSummaryActivity;
+  metrics: ActivityMetrics;
+  reportText: string;
+  rawSummary?: unknown;
+}) {
+  const db = getDb();
+
+  return db.activity.upsert({
+    where: { stravaActivityId: input.externalActivityId },
+    create: {
+      athleteId: input.athlete.id,
+      stravaActivityId: input.externalActivityId,
+      type: input.summary.sport_type ?? input.summary.type,
+      name: input.summary.name,
+      startDate: new Date(input.summary.start_date),
+      elapsedTimeSeconds: input.summary.elapsed_time,
+      movingTimeSeconds: input.summary.moving_time,
+      distanceMeters: input.summary.distance,
+      averagePowerWatts: input.metrics.averagePowerWatts,
+      normalizedPowerWatts: input.metrics.normalizedPowerWatts,
+      intensityFactor: input.metrics.intensityFactor,
+      trainingStressScore: input.metrics.trainingStressScore,
+      averageHeartRate: input.metrics.averageHeartRate,
+      maxHeartRate: input.metrics.maxHeartRate,
+      rawSummary: toInputJson(input.rawSummary ?? input.summary),
+      powerZoneSeconds: toInputJson(input.metrics.powerZoneSeconds),
+      reportText: input.reportText,
+    },
+    update: {
+      athleteId: input.athlete.id,
+      type: input.summary.sport_type ?? input.summary.type,
+      name: input.summary.name,
+      startDate: new Date(input.summary.start_date),
+      elapsedTimeSeconds: input.summary.elapsed_time,
+      movingTimeSeconds: input.summary.moving_time,
+      distanceMeters: input.summary.distance,
+      averagePowerWatts: input.metrics.averagePowerWatts,
+      normalizedPowerWatts: input.metrics.normalizedPowerWatts,
+      intensityFactor: input.metrics.intensityFactor,
+      trainingStressScore: input.metrics.trainingStressScore,
+      averageHeartRate: input.metrics.averageHeartRate,
+      maxHeartRate: input.metrics.maxHeartRate,
+      rawSummary: toInputJson(input.rawSummary ?? input.summary),
+      powerZoneSeconds: toInputJson(input.metrics.powerZoneSeconds),
+      reportText: input.reportText,
+    },
+  });
 }
 
 export async function syncRecentActivities(input?: {

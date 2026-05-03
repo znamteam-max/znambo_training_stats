@@ -18,6 +18,13 @@ type TelegramSendMessagePayload = {
   };
 };
 
+type TelegramGetFilePayload = {
+  result?: {
+    file_path?: string;
+  };
+  description?: string;
+};
+
 const telegramTextLimit = 3900;
 
 export type TelegramInlineKeyboardButton = {
@@ -166,6 +173,37 @@ export async function sendTelegramChatAction(input: {
   if (!response.ok) {
     throw new Error(`Telegram sendChatAction failed with ${response.status}.`);
   }
+}
+
+export async function downloadTelegramFile(fileId: string) {
+  const token = getTelegramToken();
+  const fileResponse = await fetch(
+    `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(
+      fileId,
+    )}`,
+  );
+  const filePayload = (await fileResponse.json().catch(() => null)) as
+    | TelegramGetFilePayload
+    | null;
+
+  if (!fileResponse.ok || !filePayload?.result?.file_path) {
+    throw new Error(
+      filePayload?.description ??
+        `Telegram getFile failed with ${fileResponse.status}.`,
+    );
+  }
+
+  const downloadResponse = await fetch(
+    `https://api.telegram.org/file/bot${token}/${filePayload.result.file_path}`,
+  );
+
+  if (!downloadResponse.ok) {
+    throw new Error(
+      `Telegram file download failed with ${downloadResponse.status}.`,
+    );
+  }
+
+  return Buffer.from(await downloadResponse.arrayBuffer());
 }
 
 export async function deleteTelegramMessage(input: {

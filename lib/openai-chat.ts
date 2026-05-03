@@ -41,7 +41,7 @@ function getOpenAIKey() {
 }
 
 function getOpenAIModel() {
-  return process.env.OPENAI_MODEL ?? "gpt-5-mini";
+  return process.env.OPENAI_MODEL ?? "gpt-5.5";
 }
 
 function isGpt5Model(model: string) {
