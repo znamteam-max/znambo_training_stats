@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleTelegramCallback } from "@/lib/telegram-menu";
 import { handleTelegramMessage } from "@/lib/telegram-commands";
 import { sendTelegramMessage } from "@/lib/telegram";
 
@@ -10,6 +11,16 @@ type TelegramUpdate = {
       id: number | string;
     };
     text?: string;
+  };
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: {
+      message_id: number;
+      chat: {
+        id: number | string;
+      };
+    };
   };
 };
 
@@ -40,6 +51,22 @@ export async function POST(request: Request) {
         chatId: String(update.message.chat.id),
         text: `Ошибка: ${message}`,
       }).catch(() => undefined);
+    }
+  }
+
+  if (update.callback_query) {
+    try {
+      await handleTelegramCallback(update.callback_query);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      const chatId = update.callback_query.message?.chat.id;
+
+      if (chatId !== undefined) {
+        await sendTelegramMessage({
+          chatId: String(chatId),
+          text: `Ошибка меню: ${message}`,
+        }).catch(() => undefined);
+      }
     }
   }
 

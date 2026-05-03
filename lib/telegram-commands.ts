@@ -11,6 +11,7 @@ import {
 } from "@/lib/health-service";
 import { askTrainingCoach, OpenAIConfigError } from "@/lib/openai-chat";
 import { buildPlanFromStoredActivity } from "@/lib/report";
+import { sendMainMenu } from "@/lib/telegram-menu";
 import { sendTelegramMessage } from "@/lib/telegram";
 
 type TelegramMessage = {
@@ -240,6 +241,10 @@ export async function handleTelegramMessage(
       chatId,
       text: buildConnectText(requestUrl, chatId),
     });
+  }
+
+  if (command === "/menu") {
+    return sendMainMenu(chatId);
   }
 
   if (command === "/last") {

@@ -4,9 +4,11 @@ import { getDb } from "@/lib/db";
 import { calculateActivityMetrics } from "@/lib/metrics";
 import { buildActivityReport } from "@/lib/report";
 import {
+  fetchStravaActivities,
   fetchLatestStravaActivity,
   fetchStravaActivityStreams,
   refreshStravaToken,
+  type StravaSummaryActivity,
   type StravaTokenResponse,
 } from "@/lib/strava";
 
@@ -18,6 +20,17 @@ function pickConnectedAthlete(athletes: Athlete[]) {
 
 function toInputJson(value: unknown) {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function getActivityStartDate(activity: StravaSummaryActivity) {
+  return new Date(activity.start_date);
+}
+
+function getActivityTitle(activity: {
+  name: string | null;
+  type: string;
+}) {
+  return activity.name ?? activity.type;
 }
 
 function getDefaultFtp() {
@@ -320,6 +333,66 @@ export async function processLatestActivity(input?: {
   };
 }
 
+export async function syncRecentActivities(input?: {
+  telegramChatId?: string;
+  perPage?: number;
+}) {
+  const athlete = await getPrimaryAthlete({
+    telegramChatId: input?.telegramChatId,
+  });
+
+  if (!athlete) {
+    return [];
+  }
+
+  const accessToken = await getValidAccessToken(athlete);
+  const summaries = await fetchStravaActivities(accessToken, {
+    perPage: input?.perPage ?? 20,
+  });
+  const db = getDb();
+
+  for (const activity of summaries) {
+    await db.activity.upsert({
+      where: { stravaActivityId: BigInt(activity.id) },
+      create: {
+        athleteId: athlete.id,
+        stravaActivityId: BigInt(activity.id),
+        type: activity.sport_type ?? activity.type,
+        name: activity.name,
+        startDate: getActivityStartDate(activity),
+        elapsedTimeSeconds: activity.elapsed_time,
+        movingTimeSeconds: activity.moving_time,
+        distanceMeters: activity.distance,
+        averagePowerWatts: activity.average_watts,
+        normalizedPowerWatts: activity.weighted_average_watts,
+        averageHeartRate: activity.average_heartrate,
+        maxHeartRate: activity.max_heartrate
+          ? Math.round(activity.max_heartrate)
+          : null,
+        rawSummary: toInputJson(activity),
+      },
+      update: {
+        athleteId: athlete.id,
+        type: activity.sport_type ?? activity.type,
+        name: activity.name,
+        startDate: getActivityStartDate(activity),
+        elapsedTimeSeconds: activity.elapsed_time,
+        movingTimeSeconds: activity.moving_time,
+        distanceMeters: activity.distance,
+        averagePowerWatts: activity.average_watts,
+        normalizedPowerWatts: activity.weighted_average_watts,
+        averageHeartRate: activity.average_heartrate,
+        maxHeartRate: activity.max_heartrate
+          ? Math.round(activity.max_heartrate)
+          : null,
+        rawSummary: toInputJson(activity),
+      },
+    });
+  }
+
+  return summaries;
+}
+
 export async function getLatestStoredActivity(telegramChatId?: string) {
   const athlete = await getPrimaryAthlete({ telegramChatId });
 
@@ -331,4 +404,61 @@ export async function getLatestStoredActivity(telegramChatId?: string) {
     where: { athleteId: athlete.id },
     orderBy: { startDate: "desc" },
   });
+}
+
+export async function getStoredActivities(input: {
+  telegramChatId: string;
+  take?: number;
+}) {
+  const athlete = await getPrimaryAthlete({ telegramChatId: input.telegramChatId });
+
+  if (!athlete) {
+    return [];
+  }
+
+  return getDb().activity.findMany({
+    where: { athleteId: athlete.id },
+    orderBy: { startDate: "desc" },
+    take: input.take ?? 30,
+  });
+}
+
+export async function getStoredActivityById(input: {
+  telegramChatId: string;
+  activityId: string;
+}) {
+  const athlete = await getPrimaryAthlete({ telegramChatId: input.telegramChatId });
+
+  if (!athlete) {
+    return null;
+  }
+
+  return getDb().activity.findFirst({
+    where: {
+      id: input.activityId,
+      athleteId: athlete.id,
+    },
+  });
+}
+
+export function buildStoredActivityLine(activity: {
+  name: string | null;
+  type: string;
+  movingTimeSeconds: number | null;
+  elapsedTimeSeconds: number | null;
+  distanceMeters: number | null;
+  trainingStressScore: number | null;
+}) {
+  const durationSeconds =
+    activity.movingTimeSeconds ?? activity.elapsedTimeSeconds ?? 0;
+  const minutes = Math.round(durationSeconds / 60);
+  const distance = activity.distanceMeters
+    ? `${(activity.distanceMeters / 1000).toFixed(1)} км`
+    : "n/a";
+  const tss =
+    activity.trainingStressScore === null
+      ? "TSS n/a"
+      : `TSS ${activity.trainingStressScore.toFixed(0)}`;
+
+  return `${getActivityTitle(activity)} · ${minutes}м · ${distance} · ${tss}`;
 }

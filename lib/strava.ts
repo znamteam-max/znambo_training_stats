@@ -18,6 +18,7 @@ export type StravaSummaryActivity = {
   type: string;
   sport_type?: string;
   start_date: string;
+  start_date_local?: string;
   elapsed_time?: number;
   moving_time?: number;
   distance?: number;
@@ -148,12 +149,25 @@ async function stravaApiFetch<T>(accessToken: string, path: string) {
 }
 
 export async function fetchLatestStravaActivity(accessToken: string) {
-  const activities = await stravaApiFetch<StravaSummaryActivity[]>(
-    accessToken,
-    "/athlete/activities?per_page=1&page=1",
-  );
+  const activities = await fetchStravaActivities(accessToken, { perPage: 1 });
 
   return activities[0] ?? null;
+}
+
+export async function fetchStravaActivities(
+  accessToken: string,
+  input?: {
+    perPage?: number;
+    page?: number;
+  },
+) {
+  const perPage = input?.perPage ?? 20;
+  const page = input?.page ?? 1;
+
+  return stravaApiFetch<StravaSummaryActivity[]>(
+    accessToken,
+    `/athlete/activities?per_page=${perPage}&page=${page}`,
+  );
 }
 
 export async function fetchStravaActivityStreams(

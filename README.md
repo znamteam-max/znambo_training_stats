@@ -116,6 +116,7 @@ Use `TELEGRAM_WEBHOOK_SECRET` as the Telegram webhook secret token.
 
 Supported commands:
 
+- `/menu`
 - `/connect`
 - `/last`
 - `/plan`
@@ -128,6 +129,10 @@ Supported commands:
 
 Plain text messages without a slash command are sent to the GPT chat handler
 when `OPENAI_API_KEY` is configured.
+
+`/menu` opens an inline Telegram menu. The training calendar syncs recent Strava
+activities, groups them by date, and lets you select one or several activities
+for the same day before confirming the selection.
 
 ## Apple Health Sync
 
