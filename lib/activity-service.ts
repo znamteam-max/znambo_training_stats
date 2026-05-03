@@ -472,13 +472,125 @@ export async function getStoredActivityById(input: {
   });
 }
 
+function buildSummaryFromStoredActivity(activity: {
+  stravaActivityId: bigint;
+  type: string;
+  name: string | null;
+  startDate: Date;
+  elapsedTimeSeconds: number | null;
+  movingTimeSeconds: number | null;
+  distanceMeters: number | null;
+  averagePowerWatts: number | null;
+  normalizedPowerWatts: number | null;
+  averageHeartRate: number | null;
+  maxHeartRate: number | null;
+  rawSummary: Prisma.JsonValue | null;
+}) {
+  const rawSummary =
+    activity.rawSummary && typeof activity.rawSummary === "object"
+      ? (activity.rawSummary as unknown as Partial<StravaSummaryActivity>)
+      : {};
+
+  return {
+    ...rawSummary,
+    id: Number(activity.stravaActivityId),
+    type: activity.type,
+    sport_type: rawSummary.sport_type ?? activity.type,
+    name: activity.name ?? rawSummary.name,
+    start_date: activity.startDate.toISOString(),
+    elapsed_time: activity.elapsedTimeSeconds ?? rawSummary.elapsed_time,
+    moving_time: activity.movingTimeSeconds ?? rawSummary.moving_time,
+    distance: activity.distanceMeters ?? rawSummary.distance,
+    average_watts: activity.averagePowerWatts ?? rawSummary.average_watts,
+    weighted_average_watts:
+      activity.normalizedPowerWatts ?? rawSummary.weighted_average_watts,
+    average_heartrate:
+      activity.averageHeartRate ?? rawSummary.average_heartrate,
+    max_heartrate: activity.maxHeartRate ?? rawSummary.max_heartrate,
+  } satisfies StravaSummaryActivity;
+}
+
+export async function ensureStoredActivityMetrics(input: {
+  telegramChatId: string;
+  activityId: string;
+}) {
+  const athlete = await getPrimaryAthlete({ telegramChatId: input.telegramChatId });
+
+  if (!athlete) {
+    return null;
+  }
+
+  const db = getDb();
+  const activity = await db.activity.findFirst({
+    where: {
+      id: input.activityId,
+      athleteId: athlete.id,
+    },
+  });
+
+  if (!activity) {
+    return null;
+  }
+
+  if (
+    activity.trainingStressScore !== null &&
+    activity.normalizedPowerWatts !== null &&
+    activity.averagePowerWatts !== null
+  ) {
+    return activity;
+  }
+
+  const accessToken = await getValidAccessToken(athlete);
+  const streams = await fetchStravaActivityStreams(
+    accessToken,
+    Number(activity.stravaActivityId),
+  );
+  const durationSeconds =
+    activity.movingTimeSeconds ??
+    activity.elapsedTimeSeconds ??
+    streams.time?.data.at(-1) ??
+    0;
+  const metrics = calculateActivityMetrics({
+    ftpWatts: athlete.ftpWatts,
+    durationSeconds,
+    watts: streams.watts?.data,
+    time: streams.time?.data,
+    heartrate: streams.heartrate?.data,
+  });
+  const summary = buildSummaryFromStoredActivity(activity);
+  const reportText = buildActivityReport({
+    activity: summary,
+    metrics,
+    ftpWatts: athlete.ftpWatts,
+  });
+
+  return db.activity.update({
+    where: { id: activity.id },
+    data: {
+      averagePowerWatts: metrics.averagePowerWatts,
+      normalizedPowerWatts: metrics.normalizedPowerWatts,
+      intensityFactor: metrics.intensityFactor,
+      trainingStressScore: metrics.trainingStressScore,
+      averageHeartRate: metrics.averageHeartRate,
+      maxHeartRate: metrics.maxHeartRate,
+      powerZoneSeconds: toInputJson(metrics.powerZoneSeconds),
+      reportText,
+    },
+  });
+}
+
 export function buildStoredActivityLine(activity: {
   name: string | null;
   type: string;
   movingTimeSeconds: number | null;
   elapsedTimeSeconds: number | null;
   distanceMeters: number | null;
+  averagePowerWatts: number | null;
+  normalizedPowerWatts: number | null;
+  intensityFactor: number | null;
   trainingStressScore: number | null;
+  averageHeartRate: number | null;
+  maxHeartRate: number | null;
 }) {
   const durationSeconds =
     activity.movingTimeSeconds ?? activity.elapsedTimeSeconds ?? 0;
@@ -490,6 +602,26 @@ export function buildStoredActivityLine(activity: {
     activity.trainingStressScore === null
       ? "TSS n/a"
       : `TSS ${activity.trainingStressScore.toFixed(0)}`;
+  const power =
+    activity.averagePowerWatts === null
+      ? "avg W n/a"
+      : `avg ${activity.averagePowerWatts.toFixed(0)} W`;
+  const normalizedPower =
+    activity.normalizedPowerWatts === null
+      ? "NP n/a"
+      : `NP ${activity.normalizedPowerWatts.toFixed(0)} W`;
+  const intensity =
+    activity.intensityFactor === null
+      ? "IF n/a"
+      : `IF ${activity.intensityFactor.toFixed(2)}`;
+  const heartRate =
+    activity.averageHeartRate === null
+      ? "HR n/a"
+      : `HR ${activity.averageHeartRate.toFixed(0)}${
+          activity.maxHeartRate ? `/${activity.maxHeartRate}` : ""
+        }`;
 
-  return `${getActivityTitle(activity)} · ${minutes}м · ${distance} · ${tss}`;
+  return `${getActivityTitle(
+    activity,
+  )} · ${minutes}м · ${distance} · ${power} · ${normalizedPower} · ${intensity} · ${tss} · ${heartRate}`;
 }

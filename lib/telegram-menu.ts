@@ -2,6 +2,7 @@ import type { Activity } from "@/generated/prisma/client";
 import {
   addAthleteNote,
   buildStoredActivityLine,
+  ensureStoredActivityMetrics,
   getStoredActivities,
   syncRecentActivities,
 } from "@/lib/activity-service";
@@ -199,6 +200,13 @@ function buildActivitySelectionMarkup(input: {
 }
 
 function buildSelectionSummary(activities: Activity[]) {
+  const durationSecondsByActivity = activities.map((activity) => {
+    return activity.movingTimeSeconds ?? activity.elapsedTimeSeconds ?? 0;
+  });
+  const totalDurationSeconds = durationSecondsByActivity.reduce(
+    (sum, seconds) => sum + seconds,
+    0,
+  );
   const totalDurationMinutes = activities.reduce((sum, activity) => {
     const seconds = activity.movingTimeSeconds ?? activity.elapsedTimeSeconds ?? 0;
 
@@ -212,6 +220,39 @@ function buildSelectionSummary(activities: Activity[]) {
     .map((activity) => activity.trainingStressScore)
     .filter((value): value is number => value !== null);
   const totalTss = tssValues.reduce((sum, value) => sum + value, 0);
+  const weightedAveragePower = getWeightedAverageMetric(
+    activities,
+    durationSecondsByActivity,
+    "averagePowerWatts",
+  );
+  const weightedNormalizedPower = getWeightedAverageMetric(
+    activities,
+    durationSecondsByActivity,
+    "normalizedPowerWatts",
+  );
+  const weightedIntensityFactor = getWeightedAverageMetric(
+    activities,
+    durationSecondsByActivity,
+    "intensityFactor",
+  );
+  const powerSummary =
+    weightedAveragePower === null &&
+    weightedNormalizedPower === null &&
+    weightedIntensityFactor === null &&
+    tssValues.length === 0
+      ? null
+      : [
+          weightedAveragePower === null
+            ? "avg W n/a"
+            : `avg ${weightedAveragePower.toFixed(0)} W`,
+          weightedNormalizedPower === null
+            ? "NP n/a"
+            : `NP ср. ${weightedNormalizedPower.toFixed(0)} W`,
+          weightedIntensityFactor === null
+            ? "IF n/a"
+            : `IF ср. ${weightedIntensityFactor.toFixed(2)}`,
+          tssValues.length > 0 ? `TSS ${totalTss.toFixed(0)}` : "TSS n/a",
+        ].join(", ");
   const lines = activities.map((activity, index) => {
     return `${index + 1}. ${buildStoredActivityLine(activity)}`;
   });
@@ -224,9 +265,70 @@ function buildSelectionSummary(activities: Activity[]) {
     `Итого: ${totalDurationMinutes}м, ${totalDistanceKm.toFixed(1)} км${
       tssValues.length > 0 ? `, TSS ${totalTss.toFixed(0)}` : ""
     }.`,
+    ...(powerSummary
+      ? [
+          `Мощность по выбранному блоку: ${powerSummary}. Длительность для расчёта: ${Math.round(
+            totalDurationSeconds / 60,
+          )}м.`,
+        ]
+      : []),
     "",
     "Теперь можно написать обычным сообщением, что именно разобрать: например, сравни эти две тренировки или оцени нагрузку за день.",
   ].join("\n");
+}
+
+function getWeightedAverageMetric(
+  activities: Activity[],
+  durationSecondsByActivity: number[],
+  field: "averagePowerWatts" | "normalizedPowerWatts" | "intensityFactor",
+) {
+  let weightedSum = 0;
+  let weightSum = 0;
+
+  activities.forEach((activity, index) => {
+    const value = activity[field];
+    const seconds = durationSecondsByActivity[index] ?? 0;
+
+    if (value !== null && seconds > 0) {
+      weightedSum += value * seconds;
+      weightSum += seconds;
+    }
+  });
+
+  return weightSum === 0 ? null : weightedSum / weightSum;
+}
+
+function buildSelectionNote(input: {
+  title: string;
+  summary: string;
+  activities: Activity[];
+}) {
+  const detailedReports = input.activities
+    .map((activity, index) => {
+      if (!activity.reportText) {
+        return null;
+      }
+
+      return `Подробный отчёт ${index + 1}:\n${activity.reportText}`;
+    })
+    .filter((report): report is string => Boolean(report));
+
+  return [input.title, input.summary, ...detailedReports].join("\n\n");
+}
+
+async function enrichSelectedActivities(chatId: string, activities: Activity[]) {
+  const enriched: Activity[] = [];
+
+  for (const activity of activities) {
+    const updated = await ensureStoredActivityMetrics({
+      telegramChatId: chatId,
+      activityId: activity.id,
+    }).catch(() => null);
+
+    enriched.push(updated ?? activity);
+  }
+
+  return enriched;
 }
 
 async function editMenu(input: {
@@ -322,11 +424,16 @@ async function renderLastTwo(chatId: string, messageId: number) {
       });
     }
 
-    const summary = buildSelectionSummary(activities);
+    const enrichedActivities = await enrichSelectedActivities(chatId, activities);
+    const summary = buildSelectionSummary(enrichedActivities);
 
     await addAthleteNote({
       telegramChatId: chatId,
-      text: `Выбранные последние тренировки для разбора:\n${summary}`,
+      text: buildSelectionNote({
+        title: "Выбранные последние тренировки для разбора:",
+        summary,
+        activities: enrichedActivities,
+      }),
     });
 
     return editMenu({
@@ -473,11 +580,19 @@ export async function handleTelegramCallback(query: TelegramCallbackQuery) {
       .sort((left, right) => left - right)
       .map((index) => dayActivities[index])
       .filter((activity): activity is Activity => Boolean(activity));
-    const summary = buildSelectionSummary(selectedActivities);
+    const enrichedActivities = await enrichSelectedActivities(
+      chatId,
+      selectedActivities,
+    );
+    const summary = buildSelectionSummary(enrichedActivities);
 
     await addAthleteNote({
       telegramChatId: chatId,
-      text: `Выбранные тренировки для разбора:\n${summary}`,
+      text: buildSelectionNote({
+        title: "Выбранные тренировки для разбора:",
+        summary,
+        activities: enrichedActivities,
+      }),
     });
 
     return editMenu({
