@@ -1,5 +1,5 @@
 name = "anfisa-training-stats"
-main = "worker/src/index.ts"
+main = "src/index.ts"
 compatibility_date = "2026-05-05"
 compatibility_flags = ["nodejs_compat"]
 
