@@ -2,6 +2,7 @@ name = "znambo-training-stats"
 main = "src/index.ts"
 compatibility_date = "2026-05-05"
 compatibility_flags = ["nodejs_compat"]
+keep_vars = true
 
 [observability]
 enabled = true
@@ -14,3 +15,18 @@ TRAINING_TIMEZONE = "Europe/Moscow"
 
 [triggers]
 crons = ["*/15 * * * *"]
+
+[secrets]
+required = [
+  "CRON_SECRET",
+  "DATABASE_URL",
+  "HEALTH_IMPORT_SECRET",
+  "OPENAI_API_KEY",
+  "STRAVA_CLIENT_ID",
+  "STRAVA_CLIENT_SECRET",
+  "STRAVA_OAUTH_STATE_SECRET",
+  "STRAVA_REDIRECT_URI",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_CHAT_ID",
+  "TELEGRAM_WEBHOOK_SECRET",
+]
