@@ -1,0 +1,15 @@
+name = "anfisa-training-stats"
+main = "worker/src/index.ts"
+compatibility_date = "2026-05-05"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+OPENAI_MODEL = "gpt-5.5"
+ATHLETE_DEFAULT_FTP = "285"
+TRAINING_TIMEZONE = "Europe/Moscow"
+
+[triggers]
+crons = ["*/15 * * * *"]
