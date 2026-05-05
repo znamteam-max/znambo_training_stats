@@ -324,8 +324,20 @@ async function handleRequest(request: Request, env: Env) {
 }
 
 export default {
-  fetch(request: Request, env: Env) {
-    return handleRequest(request, env);
+  async fetch(request: Request, env: Env) {
+    try {
+      return await handleRequest(request, env);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+
+      return json(
+        {
+          ok: false,
+          error: message,
+        },
+        { status: 500 },
+      );
+    }
   },
   scheduled(
     _event: unknown,
