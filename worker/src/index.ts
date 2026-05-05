@@ -79,6 +79,35 @@ function verifyCronSecret(env: Env, request: Request) {
   return request.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
 }
 
+function hasEnvValue(env: Env, name: keyof Env) {
+  const value = env[name];
+
+  return typeof value === "string" && value.length > 0;
+}
+
+function handleDebugEnv(env: Env) {
+  return json({
+    ok: true,
+    env: {
+      ATHLETE_DEFAULT_FTP: hasEnvValue(env, "ATHLETE_DEFAULT_FTP"),
+      ATHLETE_DEFAULT_WEIGHT_KG: hasEnvValue(env, "ATHLETE_DEFAULT_WEIGHT_KG"),
+      CRON_SECRET: hasEnvValue(env, "CRON_SECRET"),
+      DATABASE_URL: hasEnvValue(env, "DATABASE_URL"),
+      HEALTH_IMPORT_SECRET: hasEnvValue(env, "HEALTH_IMPORT_SECRET"),
+      OPENAI_API_KEY: hasEnvValue(env, "OPENAI_API_KEY"),
+      OPENAI_MODEL: hasEnvValue(env, "OPENAI_MODEL"),
+      STRAVA_CLIENT_ID: hasEnvValue(env, "STRAVA_CLIENT_ID"),
+      STRAVA_CLIENT_SECRET: hasEnvValue(env, "STRAVA_CLIENT_SECRET"),
+      STRAVA_OAUTH_STATE_SECRET: hasEnvValue(env, "STRAVA_OAUTH_STATE_SECRET"),
+      STRAVA_REDIRECT_URI: hasEnvValue(env, "STRAVA_REDIRECT_URI"),
+      TELEGRAM_BOT_TOKEN: hasEnvValue(env, "TELEGRAM_BOT_TOKEN"),
+      TELEGRAM_CHAT_ID: hasEnvValue(env, "TELEGRAM_CHAT_ID"),
+      TELEGRAM_WEBHOOK_SECRET: hasEnvValue(env, "TELEGRAM_WEBHOOK_SECRET"),
+      TRAINING_TIMEZONE: hasEnvValue(env, "TRAINING_TIMEZONE"),
+    },
+  });
+}
+
 async function handleTelegramWebhook(env: Env, request: Request) {
   if (!verifyTelegramSecret(env, request)) {
     return json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -318,6 +347,10 @@ async function handleRequest(request: Request, env: Env) {
 
   if (request.method === "GET" && url.pathname === "/") {
     return json({ ok: true, service: "znambo-training-stats-worker" });
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/debug/env") {
+    return handleDebugEnv(env);
   }
 
   return json({ ok: false, error: "Not found" }, { status: 404 });
