@@ -27,6 +27,7 @@ import {
 } from "./telegram";
 import type {
   Activity,
+  Athlete,
   Env,
   TelegramCallbackQuery,
   TelegramDocument,
@@ -203,6 +204,27 @@ async function handleNoteCommand(env: Env, chatId: string, text: string) {
   });
 }
 
+async function handleGoalCommand(env: Env, chatId: string, text: string) {
+  if (!text) {
+    return sendTelegramMessage({
+      env,
+      chatId,
+      text: "Цель пиши после команды: /goal финишировать HYROX без провала по бегу.",
+    });
+  }
+
+  await addAthleteNote(env, {
+    telegramChatId: chatId,
+    text: `Цель спортсмена: ${text}`,
+  });
+
+  return sendTelegramMessage({
+    env,
+    chatId,
+    text: "Цель сохранил. Буду держать её в контексте следующих ответов.",
+  });
+}
+
 function startTypingIndicator(env: Env, chatId: string) {
   void sendTelegramChatAction({ env, chatId }).catch(() => undefined);
 
@@ -314,6 +336,64 @@ async function handleFitDocument(
   }
 }
 
+function truncateForMemory(text: string, maxLength: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function buildCurrentDateContext(env: Env, nowDate: Date) {
+  return [
+    `Дата сегодня: ${formatDateKey(env, nowDate)}.`,
+    `Время сейчас: ${formatTime(env, nowDate)}.`,
+    `Часовой пояс: ${env.TRAINING_TIMEZONE ?? "Europe/Moscow"}.`,
+  ].join("\n");
+}
+
+function buildAthleteProfileContext(athlete: Athlete) {
+  return [
+    `Telegram chat id: ${athlete.telegramChatId ?? "n/a"}.`,
+    `Strava athlete id: ${athlete.stravaAthleteId?.toString() ?? "n/a"}.`,
+    `FTP: ${athlete.ftpWatts} W.`,
+    `Вес: ${athlete.weightKg === null ? "n/a" : `${athlete.weightKg} кг`}.`,
+  ].join("\n");
+}
+
+function buildActivitiesContext(
+  env: Env,
+  activities: Activity[],
+  emptyText: string,
+) {
+  if (activities.length === 0) {
+    return emptyText;
+  }
+
+  return activities
+    .map((activity, index) => {
+      return `${index + 1}. ${formatDateKey(env, activity.startDate)} ${formatTime(
+        env,
+        activity.startDate,
+      )} · ${buildStoredActivityLine(activity)}`;
+    })
+    .join("\n");
+}
+
+function buildConversationMemoryNote(input: {
+  env: Env;
+  question: string;
+  answer: string;
+}) {
+  const nowDate = new Date();
+
+  return [
+    `Диалог ${formatDateKey(input.env, nowDate)} ${formatTime(input.env, nowDate)}`,
+    `Пользователь: ${truncateForMemory(input.question, 700)}`,
+    `Ответ бота: ${truncateForMemory(input.answer, 900)}`,
+  ].join("\n");
+}
+
 async function handleCoachChat(env: Env, chatId: string, text: string) {
   if (!text) {
     return sendTelegramMessage({
@@ -327,19 +407,63 @@ async function handleCoachChat(env: Env, chatId: string, text: string) {
   const thinkingMessageId = await sendThinkingMessage(env, chatId);
 
   try {
+    const athlete = await getOrCreateTelegramAthlete(env, chatId);
+    const nowDate = new Date();
+
+    await syncRecentActivities(env, { telegramChatId: chatId, perPage: 10 }).catch(
+      () => undefined,
+    );
+    await processLatestActivity(env, { telegramChatId: chatId }).catch(
+      () => undefined,
+    );
+
+    const recentActivities = await getStoredActivities(env, {
+      telegramChatId: chatId,
+      take: 8,
+    });
+    const todayKey = formatDateKey(env, nowDate);
+    const todayActivities = recentActivities.filter((activity) => {
+      return formatDateKey(env, activity.startDate) === todayKey;
+    });
     const latestActivity = await getLatestStoredActivity(env, chatId);
     const latestHealth = await getLatestDailyHealthLog(env, chatId);
     const notes = await getRecentAthleteNotes(env, {
       telegramChatId: chatId,
-      take: 3,
+      take: 8,
     });
+    const conversationNotes = notes.filter((note) =>
+      note.text.startsWith("Диалог "),
+    );
+    const contextNotes = notes.filter(
+      (note) => !note.text.startsWith("Диалог "),
+    );
     const answer = await askTrainingCoach({
       env,
       question: text,
+      currentDateText: buildCurrentDateContext(env, nowDate),
+      athleteProfileText: buildAthleteProfileContext(athlete),
+      todayActivitiesText: buildActivitiesContext(
+        env,
+        todayActivities,
+        "После свежей синхронизации Strava тренировок за сегодня в базе нет.",
+      ),
+      recentActivitiesText: buildActivitiesContext(
+        env,
+        recentActivities,
+        "Последних тренировок в базе нет.",
+      ),
       latestReportText: latestActivity?.reportText,
       latestHealthText: buildDailyHealthContext(latestHealth),
-      latestNotesText: notes.map((note) => note.text).join("\n\n"),
+      latestNotesText: contextNotes.map((note) => note.text).join("\n\n"),
+      conversationMemoryText: conversationNotes
+        .map((note) => note.text)
+        .join("\n\n"),
     });
+
+    await addAthleteNote(env, {
+      telegramChatId: chatId,
+      text: buildConversationMemoryNote({ env, question: text, answer }),
+    }).catch(() => undefined);
 
     return await sendTelegramMessage({
       env,
@@ -1025,13 +1149,14 @@ export async function handleTelegramMessage(
   if (command === "/ftp") return handleFtpCommand(env, chatId, args[0]);
   if (command === "/weight") return handleWeightCommand(env, chatId, args[0]);
   if (command === "/note") return handleNoteCommand(env, chatId, rawArgs);
+  if (command === "/goal") return handleGoalCommand(env, chatId, rawArgs);
   if (command === "/ask") return handleCoachChat(env, chatId, rawArgs);
 
   if (command.startsWith("/")) {
     return sendTelegramMessage({
       env,
       chatId,
-      text: "Команды: /connect, /last, /plan, /health, /ask вопрос, /ftp 285, /weight 82, /note текст. Обычный текст без команды я отправлю в GPT-чат. FIT-файл можно просто прикрепить сообщением.",
+      text: "Команды: /connect, /last, /plan, /health, /ask вопрос, /ftp 285, /weight 82, /goal цель, /note текст. Обычный текст без команды я отправлю в GPT-чат. FIT-файл можно просто прикрепить сообщением.",
     });
   }
 

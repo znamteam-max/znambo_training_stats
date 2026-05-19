@@ -3,9 +3,14 @@ import type { Env } from "./types";
 type AskTrainingCoachInput = {
   env: Env;
   question: string;
+  currentDateText?: string | null;
+  athleteProfileText?: string | null;
+  todayActivitiesText?: string | null;
+  recentActivitiesText?: string | null;
   latestReportText?: string | null;
   latestHealthText?: string | null;
   latestNotesText?: string | null;
+  conversationMemoryText?: string | null;
 };
 
 type OpenAIResponsePayload = {
@@ -66,6 +71,22 @@ function extractText(payload: OpenAIResponsePayload) {
 function buildInput(input: AskTrainingCoachInput) {
   const parts = [`Вопрос пользователя:\n${input.question}`];
 
+  if (input.currentDateText) {
+    parts.push(`Текущая дата и часовой пояс:\n${input.currentDateText}`);
+  }
+
+  if (input.athleteProfileText) {
+    parts.push(`Профиль спортсмена:\n${input.athleteProfileText}`);
+  }
+
+  if (input.todayActivitiesText) {
+    parts.push(`Тренировки за сегодня:\n${input.todayActivitiesText}`);
+  }
+
+  if (input.recentActivitiesText) {
+    parts.push(`Последние тренировки:\n${input.recentActivitiesText}`);
+  }
+
   if (input.latestReportText) {
     parts.push(`Последний разбор тренировки:\n${input.latestReportText}`);
   }
@@ -76,6 +97,10 @@ function buildInput(input: AskTrainingCoachInput) {
 
   if (input.latestNotesText) {
     parts.push(`Последние заметки и выбранные тренировки:\n${input.latestNotesText}`);
+  }
+
+  if (input.conversationMemoryText) {
+    parts.push(`Память диалога:\n${input.conversationMemoryText}`);
   }
 
   return parts.join("\n\n");
@@ -90,6 +115,9 @@ export async function askTrainingCoach(input: AskTrainingCoachInput) {
       "Отвечай по-русски, конкретно и по делу.",
       "Если есть контекст последней тренировки, здоровья или питания, используй его.",
       "Не выдумывай данные Strava, Apple Health или питания, которых нет в сообщении.",
+      "API не хранит память сам: считай Профиль спортсмена, Тренировки за сегодня, Последние тренировки, Health, заметки и Память диалога своей единственной памятью.",
+      "Текущая дата и часовой пояс являются главным источником даты. Если пользователь спрашивает про сегодня, сначала используй блок 'Тренировки за сегодня'. Если там написано, что тренировок сегодня нет, так и скажи; не выдавай старую тренировку за сегодняшнюю.",
+      "Используй профиль спортсмена для FTP, веса, личности и известных целей. Если значения нет в профиле или памяти, не угадывай.",
       "Если пользователь говорит, что выбранные активности являются одной тренировкой, оцени их суммарно.",
       "Для велотренировок делай акцент на avg W, NP, IF, TSS, длительность, ровность и распределение нагрузки.",
       "Давай практические рекомендации: что делать сегодня/завтра, на что смотреть, какие риски.",
