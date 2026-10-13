@@ -1,4 +1,5 @@
 name = "znambo-training-stats"
+account_id = "f7f0376bf1c44c4e3cef4a24adf1b66a"
 main = "src/index.ts"
 compatibility_date = "2026-05-05"
 compatibility_flags = ["nodejs_compat"]
