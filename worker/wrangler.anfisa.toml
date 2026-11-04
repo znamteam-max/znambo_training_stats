@@ -9,7 +9,7 @@ keep_vars = true
 enabled = true
 
 [vars]
-OPENAI_MODEL = "gpt-5.5"
+OPENAI_MODEL = "gpt-6-astra"
 ATHLETE_DEFAULT_FTP = "285"
 TRAINING_TIMEZONE = "Europe/Moscow"
 
